@@ -18,7 +18,7 @@ docker-compose up --build
 ```
 
 ## Scenarios
-
+By default all scenarios are run.
 Set the `SCENARIO` environment variable to run a specific scenario:
 
 | Value        | Description                                              |

@@ -14,6 +14,8 @@ services:
       target: java8-fixed
     mem_limit: 512m
     cpus: 2.0
+    environment:
+      - SCENARIO=${SCENARIO:-all}
 
   # Java 11 — automatic container detection, no flags needed
   java11:
@@ -22,6 +24,8 @@ services:
       target: java11
     mem_limit: 512m
     cpus: 2.0
+    environment:
+      - SCENARIO=${SCENARIO:-all}
     depends_on:
       java8-fixed:
         condition: service_completed_successfully
@@ -33,6 +37,8 @@ services:
       target: java17
     mem_limit: 512m
     cpus: 2.0
+    environment:
+      - SCENARIO=${SCENARIO:-all}
     depends_on:
       java11:
         condition: service_completed_successfully
@@ -46,6 +52,8 @@ services:
       target: java8-legacy
     mem_limit: 512m
     cpus: 2.0
+    environment:
+      - SCENARIO=${SCENARIO:-all}
     depends_on:
       java17:
         condition: service_completed_successfully
