@@ -1,0 +1,51 @@
+# ==============================================================================
+# NOTE: Containers are executed sequentially using 'depends_on' condition
+# 'service_completed_successfully'. This is strictly an educational setup  
+# to prevent stdout logs from 4 different JVMs from interleaving in your terminal.
+# The legacy Java 8 container runs last as it exits with code 137 (OOMKilled).
+# ==============================================================================
+services:
+
+  # Java 8u191+ with explicit flags — opt-in container support
+  # Requires -XX:+UseContainerSupport and -XX:MaxRAMPercentage
+  java8-fixed:
+    build:
+      context: .
+      target: java8-fixed
+    mem_limit: 512m
+    cpus: 2.0
+
+  # Java 11 — automatic container detection, no flags needed
+  java11:
+    build:
+      context: .
+      target: java11
+    mem_limit: 512m
+    cpus: 2.0
+    depends_on:
+      java8-fixed:
+        condition: service_completed_successfully
+
+  # Java 17 — full cgroups v1 + v2 support
+  java17:
+    build:
+      context: .
+      target: java17
+    mem_limit: 512m
+    cpus: 2.0
+    depends_on:
+      java11:
+        condition: service_completed_successfully
+
+  # Java 8 without container support — reads host memory and CPUs
+  # Simulates behavior before Java 8u131
+  # Runs last — OOMKilled during memory scenario, does not block other services
+  java8-legacy:
+    build:
+      context: .
+      target: java8-legacy
+    mem_limit: 512m
+    cpus: 2.0
+    depends_on:
+      java17:
+        condition: service_completed_successfully
