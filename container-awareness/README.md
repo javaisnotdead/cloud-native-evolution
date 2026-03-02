@@ -1,7 +1,7 @@
 # Container Awareness Demo
 
 Code examples for **Cloud Native Evolution - Article 2**:
-[When Docker Killed Your Java App (And You Didn't Know Why)](https://javaisnotdead.com)
+[When Docker Killed Your Java App (And You Didn't Know Why)](https://www.javaisnotdead.com/jvm-container-awareness-docker-oomkill/)
 
 Demonstrates how Java 8, 8u191, 11, and 17 read container resource limits differently.
 One application, four JVM versions, side-by-side comparison via Docker Compose.
