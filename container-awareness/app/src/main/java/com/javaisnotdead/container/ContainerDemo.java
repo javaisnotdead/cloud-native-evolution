@@ -76,7 +76,7 @@ public class ContainerDemo {
     // -------------------------------------------------------------------------
 
     static void runMemory() throws InterruptedException {
-        printHeader("Scenario 2: Memory Scaling");
+        printHeader("Scenario 3: Memory Scaling");
         printJvmInfo();
 
         long maxHeapMB = Runtime.getRuntime().maxMemory() / MB;
@@ -110,7 +110,7 @@ public class ContainerDemo {
     // -------------------------------------------------------------------------
 
     static void runCpu() {
-        printHeader("Scenario 3: CPU Awareness");
+        printHeader("Scenario 2: CPU Awareness");
         printJvmInfo();
 
         int jvmCpus = Runtime.getRuntime().availableProcessors();
