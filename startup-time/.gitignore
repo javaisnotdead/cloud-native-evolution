@@ -1,0 +1,7 @@
+.build/
+.cds/
+.idea
+.vscode
+petclinic/
+tmp/
+diagnostics/
