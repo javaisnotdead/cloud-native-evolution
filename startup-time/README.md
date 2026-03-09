@@ -1,7 +1,7 @@
 # startup-time
 
-Benchmark for Article 3 of the [Cloud Native Evolution](https://javaisnotdead.com) series:
-**"The 30-Second Problem: Why Java Struggled in Serverless"**
+Benchmark for Cloud Native Evolution - Article 3:
+[The 30-Second Problem: Why Java Struggled in Serverless](https://www.javaisnotdead.com/spring-boot-4-startup-optimization/)
 
 Measures startup time across seven JVM optimization steps using
 **Spring PetClinic** — the canonical Spring Boot sample application, cloned and built
@@ -77,7 +77,6 @@ BENCHMARK_RUNS=5 ./scripts/benchmark-log.sh
 **Spring PetClinic** (Spring Boot 4.0, Spring Data JPA, H2, Thymeleaf, Bean Validation,
 Caffeine caching, Spring Actuator). Multiple MVC controllers, JPA entities with
 relationships, form validation — representative of a real-world Spring application.
-Loads ~6,000–8,000 classes at startup.
 
 ## Build cache
 
@@ -88,6 +87,11 @@ trigger a full rebuild. To force a clean slate:
 rm -rf .build/ .cds/ petclinic/
 ./scripts/benchmark.sh
 ```
+
+## Graal VM JDK 25 installation
+
+https://www.graalvm.org/downloads/
+https://www.graalvm.org/latest/getting-started/windows/
 
 ## Windows / Git Bash
 
