@@ -1,9 +1,10 @@
 # startup-time
 
-Benchmark for Cloud Native Evolution - Article 3:
-[The 30-Second Problem: Why Java Struggled in Serverless](https://www.javaisnotdead.com/spring-boot-4-startup-optimization/)
+Benchmark for Cloud Native Evolution series:
+- Article 3: [The 30-Second Problem: Why Java Struggled in Serverless](https://www.javaisnotdead.com/spring-boot-4-startup-optimization/)
+- Article 4: [Project Leyden: The Roadmap to 50-Millisecond Java](https://www.javaisnotdead.com/project-leyden-java-startup-optimization/)
 
-Measures startup time across seven JVM optimization steps using
+Measures startup time across the full JVM optimization ladder using
 **Spring PetClinic** — the canonical Spring Boot sample application, cloned and built
 automatically on first run.
 
@@ -44,11 +45,6 @@ Parses Spring Boot's self-reported **"Started … in X.XXX seconds"** log line.
 | ⚠️ **Under-reports real readiness** | Spring declares "Started" before the first HTTP request can actually be served. The gap is small (~5-20 ms) but real. |
 | ⚠️ **Native image: different log format** | GraalVM native binaries may emit a slightly different startup message; verify with your version. |
 
-### Which one to pick?
-
-- **Benchmarking for an article or comparing optimization steps** → use `benchmark-log.sh` (less noise)
-- **Estimating cold-start latency for Kubernetes / serverless** → use `benchmark.sh` (matches real-world probe)
-
 Both scripts share the same build cache (`.build/`) and produce independent result files (`.cds/<step>.ms` vs `.cds/<step>-log.ms`), so you can run them side by side.
 
 ## Number of runs
@@ -70,6 +66,9 @@ BENCHMARK_RUNS=5 ./scripts/benchmark-log.sh
 | `appcds` | Application + JDK class archive — available since Java 10 |
 | `lazy-init` | AppCDS + Spring lazy bean initialization |
 | `aot` | AppCDS + Spring Boot AOT processing |
+| `leyden` | Leyden AOT Cache replacing manual AppCDS — JDK 24+ |
+| `leyden-lazy` | Leyden AOT Cache + Spring lazy bean initialization |
+| `leyden-aot` | Leyden AOT Cache + Spring Boot AOT processing |
 | `native` | GraalVM Native Image — no JVM |
 
 ## Application
@@ -88,10 +87,22 @@ rm -rf .build/ .cds/ petclinic/
 ./scripts/benchmark.sh
 ```
 
-## Graal VM JDK 25 installation
+## JDK requirements
 
-https://www.graalvm.org/downloads/
-https://www.graalvm.org/latest/getting-started/windows/
+The benchmark requires two separate JDK installations:
+
+**Temurin 25 (or any standard JDK 25)** — used for all steps except `native`. This is the primary JDK for the benchmark. Leyden's AOT Cache (`leyden`, `leyden-lazy`, `leyden-aot`) requires a standard HotSpot JVM. Running Leyden steps on GraalVM JDK will produce misleading results because GraalVM's JIT pipeline differs from HotSpot.
+
+**GraalVM JDK 25** — required only to build the `native` step. The benchmark script uses `GRAALVM_HOME` to locate `native-image` for that step only, then returns to Temurin for measurement.
+
+Set `GRAALVM_HOME` before running:
+
+```bash
+export GRAALVM_HOME=/path/to/graalvm-jdk-25
+```
+
+Temurin 25: https://adoptium.net/
+GraalVM 25: https://www.graalvm.org/downloads/
 
 ## Windows / Git Bash
 

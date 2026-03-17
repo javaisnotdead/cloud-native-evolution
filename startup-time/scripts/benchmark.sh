@@ -4,7 +4,10 @@
 # Uses Spring PetClinic as the benchmark application (cloned automatically
 # from GitHub on first run).
 #
-# Usage: ./benchmark.sh [baseline|extracted|cds|appcds|lazy-init|aot|native|all]
+# Requires OpenJDK/Temurin 25+ (not GraalVM) for Leyden AOT features (JEP 515).
+# Native Image step requires GraalVM — set GRAALVM_HOME if it differs from JAVA_HOME.
+#
+# Usage: ./benchmark.sh [baseline|extracted|cds|appcds|lazy-init|aot|leyden|leyden-lazy|leyden-aot|native|all]
 # Default: all
 
 set -euo pipefail
@@ -35,8 +38,14 @@ fi
 
 RUNS="${BENCHMARK_RUNS:-10}"
 PORT=8080
+TRAINING_PORT=8080
+TRAINING_DURATION="120s"
+TRAINING_CONCURRENCY=10
+TRAINING_ENDPOINT="http://localhost:$TRAINING_PORT/vets"
+HEALTH_URL="http://localhost:$TRAINING_PORT/actuator/health"
+HEALTH_TIMEOUT=60
 
-STEPS_ALL=(baseline extracted cds appcds lazy-init aot native)
+STEPS_ALL=(baseline extracted cds appcds lazy-init aot leyden leyden-lazy leyden-aot native)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logging & formatting
@@ -101,8 +110,8 @@ ensure_default_jar() {
     (cd "$PETCLINIC_DIR" && ./mvnw package $MVNW_OPTS)
     mkdir -p "$(dirname "$DEFAULT_JAR")"
     cp "$PETCLINIC_DIR/target/$JAR_NAME" "$DEFAULT_JAR"
-    # Purge stale CDS archives — they embed JAR timestamp/size in the header
-    rm -f "$CDS_DIR"/app-cds.jsa
+    # Purge stale CDS/Leyden archives — they embed JAR timestamp/size in the header
+    rm -f "$CDS_DIR"/app-cds.jsa "$CDS_DIR"/leyden.aot "$CDS_DIR"/leyden.aotconf
     log "JAR cached: $DEFAULT_JAR"
 }
 
@@ -124,8 +133,8 @@ ensure_aot_jar() {
     (cd "$PETCLINIC_DIR" && ./mvnw clean compile spring-boot:process-aot package $MVNW_OPTS)
     mkdir -p "$(dirname "$AOT_JAR")"
     cp "$PETCLINIC_DIR/target/$JAR_NAME" "$AOT_JAR"
-    # Purge stale AOT CDS archive
-    rm -f "$CDS_DIR"/aot-cds.jsa
+    # Purge stale AOT CDS/Leyden archives
+    rm -f "$CDS_DIR"/aot-cds.jsa "$CDS_DIR"/leyden-aot.aot "$CDS_DIR"/leyden-aot.aotconf
     log "AOT JAR cached: $AOT_JAR"
 }
 
@@ -143,13 +152,31 @@ ensure_native() {
     [ -f "$NATIVE_BIN" ] && return 0
     setup_petclinic
     log "Building GraalVM native image — this takes 4-6 minutes..."
+
+    # Native Image requires GraalVM. If JAVA_HOME points to a non-GraalVM JDK
+    # (e.g. Temurin for Leyden benchmarks), use GRAALVM_HOME instead.
+    local saved_java_home="${JAVA_HOME:-}"
+    if [ -n "${GRAALVM_HOME:-}" ]; then
+        log "Using GRAALVM_HOME=$GRAALVM_HOME for native build"
+        export JAVA_HOME="$GRAALVM_HOME"
+    fi
+
     # On Windows, native-image ships as a .cmd; the bare name is a broken shim in Git Bash
-    if ! command -v native-image &>/dev/null && ! command -v native-image.cmd &>/dev/null; then
-        log "ERROR: 'native-image' not found. Install GraalVM and run: gu install native-image"
+    if ! "$JAVA_HOME/bin/native-image" --version &>/dev/null && \
+       ! "$JAVA_HOME/bin/native-image.cmd" --version &>/dev/null; then
+        log "ERROR: 'native-image' not found in JAVA_HOME=$JAVA_HOME"
+        log "Set GRAALVM_HOME to a GraalVM installation that includes native-image."
+        [ -n "$saved_java_home" ] && export JAVA_HOME="$saved_java_home"
         exit 1
     fi
+
     (cd "$PETCLINIC_DIR" && ./mvnw -Pnative native:compile -DskipTests \
         -Dcheckstyle.skip -Dspring-javaformat.skip)
+
+    # Restore original JAVA_HOME
+    if [ -n "$saved_java_home" ]; then
+        export JAVA_HOME="$saved_java_home"
+    fi
     local src_bin
     if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then
         src_bin="$PETCLINIC_DIR/target/spring-petclinic.exe"
@@ -191,6 +218,133 @@ generate_archive() {
     }
 
     log "Archive ready: $archive"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Hey download (for Leyden training load)
+# ─────────────────────────────────────────────────────────────────────────────
+
+ensure_hey() {
+    if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* || "$(uname -s)" == CYGWIN* ]]; then
+        HEY_BIN="$TMP_DIR/hey_windows_amd64.exe"
+        HEY_URL="https://hey-release.s3.us-east-2.amazonaws.com/hey_windows_amd64"
+    elif [[ "$(uname -s)" == Darwin* ]]; then
+        if [[ "$(uname -m)" == "arm64" ]]; then
+            HEY_BIN="$TMP_DIR/hey_darwin_arm64"
+            HEY_URL="https://hey-release.s3.us-east-2.amazonaws.com/hey_darwin_arm64"
+        else
+            HEY_BIN="$TMP_DIR/hey_darwin_amd64"
+            HEY_URL="https://hey-release.s3.us-east-2.amazonaws.com/hey_darwin_amd64"
+        fi
+    else
+        HEY_BIN="$TMP_DIR/hey_linux_amd64"
+        HEY_URL="https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64"
+    fi
+
+    mkdir -p "$TMP_DIR"
+    if [ ! -f "$HEY_BIN" ]; then
+        log "Downloading 'hey' load testing tool..."
+        curl -sL "$HEY_URL" -o "$HEY_BIN"
+        chmod +x "$HEY_BIN"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Wait for app health check
+# ─────────────────────────────────────────────────────────────────────────────
+
+wait_for_health() {
+    local url="$1"
+    local timeout="$2"
+    local deadline=$(( $(date +%s) + timeout ))
+    while ! curl -sf "$url" > /dev/null 2>&1; do
+        if [ "$(date +%s)" -gt "$deadline" ]; then
+            log "ERROR: Health check timed out after ${timeout}s"
+            return 1
+        fi
+        sleep 0.5
+    done
+}
+
+# Leyden AOT Cache generation (JEP 514 one-step workflow)
+# ─────────────────────────────────────────────────────────────────────────────
+
+generate_leyden_cache() {
+    local extracted_dir="$1"
+    local cache="$2"
+    local jvm_opts="${3:-}"
+
+    mkdir -p "$CDS_DIR"
+    ensure_hey
+
+    log "Leyden training run: $(basename "$cache")"
+    log "Starting app with AOTCacheOutput on port $TRAINING_PORT..."
+
+    # JEP 514 (JDK 25): AOTCacheOutput combines record + create in one run.
+    # The app must handle real requests so JEP 515 can record method profiles.
+    # +AOTClassLinking (JEP 483): pre-links and pre-verifies classes in cache,
+    # so the JVM skips these steps at startup.
+    # Cache is written automatically on JVM shutdown.
+    local training_pid=""
+    # shellcheck disable=SC2086
+    cd "$extracted_dir"
+    java $jvm_opts \
+         -XX:AOTCacheOutput="$cache" \
+         -XX:+AOTClassLinking \
+         -jar "$JAR_NAME" --server.port="$TRAINING_PORT" \
+         > "$TMP_DIR/leyden-training.log" 2>&1 &
+    training_pid=$!
+    cd "$OLDPWD"
+
+    if ! wait_for_health "$HEALTH_URL" "$HEALTH_TIMEOUT"; then
+        kill "$training_pid" 2>/dev/null || true
+        log "ERROR: Training app failed to start. Check $TMP_DIR/leyden-training.log"
+        exit 1
+    fi
+
+    log "Sending ${TRAINING_DURATION} of load to build method profiles..."
+    "$HEY_BIN" -z "$TRAINING_DURATION" -c "$TRAINING_CONCURRENCY" \
+        "$TRAINING_ENDPOINT" > "$TMP_DIR/leyden-training-load.log" 2>&1
+
+    log "Stopping training app via actuator shutdown..."
+    local shutdown_url="http://localhost:$TRAINING_PORT/actuator/shutdown"
+    curl -sf -X POST "$shutdown_url" > /dev/null 2>&1 || true
+
+    # Wait for JVM to write cache and exit
+    local waited=0
+    while kill -0 "$training_pid" 2>/dev/null && [ $waited -lt 30 ]; do
+        sleep 0.5
+        waited=$((waited + 1))
+    done
+    # Force kill if still alive after 15s
+    if kill -0 "$training_pid" 2>/dev/null; then
+        log "WARNING: Graceful shutdown timed out, force killing..."
+        kill -9 "$training_pid" 2>/dev/null || true
+    fi
+    wait "$training_pid" 2>/dev/null || true
+
+    if [ ! -f "$cache" ]; then
+        log "ERROR: AOT cache not created at $cache"
+        log "Check $TMP_DIR/leyden-training.log"
+        exit 1
+    fi
+
+    log "Leyden cache ready: $cache ($(du -h "$cache" | cut -f1))"
+}
+
+ensure_leyden_cache() {
+    ensure_default_extracted
+    local cache="$CDS_DIR/leyden.aot"
+    [ -f "$cache" ] && return 0
+    generate_leyden_cache "$DEFAULT_EXTRACTED" "$cache"
+}
+
+ensure_leyden_aot_cache() {
+    ensure_aot_extracted
+    local cache="$CDS_DIR/leyden-aot.aot"
+    [ -f "$cache" ] && return 0
+    generate_leyden_cache "$AOT_EXTRACTED" "$cache" "-Dspring.aot.enabled=true"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -307,6 +461,39 @@ step_aot() {
     save_result "aot" "$result"
 }
 
+step_leyden() {
+    ensure_leyden_cache
+    local result
+    result=$(run_step "leyden" \
+        "java -XX:AOTCache=$CDS_DIR/leyden.aot -XX:AOTMode=on -XX:+AOTClassLinking \
+         -jar $JAR_NAME --server.port=$PORT" \
+        "$DEFAULT_EXTRACTED")
+    save_result "leyden" "$result"
+}
+
+step_leyden_lazy() {
+    ensure_leyden_cache
+    local result
+    result=$(run_step "leyden-lazy" \
+        "java -XX:AOTCache=$CDS_DIR/leyden.aot -XX:AOTMode=on -XX:+AOTClassLinking \
+         -Dspring.main.lazy-initialization=true \
+         -jar $JAR_NAME --server.port=$PORT" \
+        "$DEFAULT_EXTRACTED")
+    save_result "leyden-lazy" "$result"
+}
+
+step_leyden_aot() {
+    ensure_leyden_aot_cache
+    local result
+    result=$(run_step "leyden-aot" \
+        "java -Dspring.aot.enabled=true \
+         -XX:AOTCache=$CDS_DIR/leyden-aot.aot -XX:AOTMode=on -XX:+AOTClassLinking \
+         -Dspring.main.lazy-initialization=true \
+         -jar $JAR_NAME --server.port=$PORT" \
+        "$AOT_EXTRACTED")
+    save_result "leyden-aot" "$result"
+}
+
 step_native() {
     ensure_native
     local result
@@ -374,13 +561,16 @@ print_results() {
 STEP="${1:-all}"
 
 case "$STEP" in
-    baseline)  step_baseline ;;
-    extracted) step_extracted ;;
-    cds)       step_cds ;;
-    appcds)    step_appcds ;;
-    lazy-init) step_lazy_init ;;
-    aot)       step_aot ;;
-    native)    step_native ;;
+    baseline)    step_baseline ;;
+    extracted)   step_extracted ;;
+    cds)         step_cds ;;
+    appcds)      step_appcds ;;
+    lazy-init)   step_lazy_init ;;
+    aot)         step_aot ;;
+    leyden)      step_leyden ;;
+    leyden-lazy) step_leyden_lazy ;;
+    leyden-aot)  step_leyden_aot ;;
+    native)      step_native ;;
     all)
         step_baseline
         step_extracted
@@ -388,10 +578,13 @@ case "$STEP" in
         step_appcds
         step_lazy_init
         step_aot
+        step_leyden
+        step_leyden_lazy
+        step_leyden_aot
         step_native
         ;;
     *)
-        echo "Usage: $0 [baseline|extracted|cds|appcds|lazy-init|aot|native|all]"
+        echo "Usage: $0 [baseline|extracted|cds|appcds|lazy-init|aot|leyden|leyden-lazy|leyden-aot|native|all]"
         echo "Default: all"
         exit 1
         ;;
