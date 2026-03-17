@@ -514,7 +514,6 @@ print_results() {
     printf "  %-20s %10s   %s\n" "Optimization Step" "Startup" "Improvement"
     echo "───────────────────────────────────────────────────────"
 
-    # Najpierw zbierzmy dane, żeby znaleźć max do skalowania wykresu
     local -a labels=()
     local -a values=()
     local max_val=0
@@ -529,7 +528,6 @@ print_results() {
         fi
     done
 
-    # Rysowanie wierszy z wykresem
     local bar_max_width=30
     [ "$max_val" -eq 0 ] && max_val=1
 
@@ -537,12 +535,10 @@ print_results() {
         local label="${labels[$i]}"
         local val="${values[$i]}"
         
-        # Obliczanie paska
         local bar_size=$(( val * bar_max_width / max_val ))
         local bar=""
         for ((j=0; j<bar_size; j++)); do bar="${bar}█"; done
         
-        # Wyświetlanie wiersza
         local pct_label
         pct_label=$(pct "${baseline:-0}" "$val")
         
