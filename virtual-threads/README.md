@@ -4,18 +4,6 @@ Companion code for Cloud Native Evolution - Article 5: [Virtual Threads: Thread-
 
 Compares four concurrency approaches on the same workload.
 
-## Configuration
-
-Both apps use a 20-connection database pool. The blocking app limits Tomcat to 20 platform threads to make the thread pool ceiling visible at low concurrency. With virtual threads enabled, the Tomcat thread limit is ignored.
-
-| Setting | Platform | Virtual | Reactive |
-|---|---|---|---|
-| Server | Tomcat (20 threads) | Tomcat (virtual threads) | Netty (event loop) |
-| DB driver | JDBC (blocking) | JDBC (blocking) | R2DBC (non-blocking) |
-| DB pool | HikariCP, max 20 | HikariCP, max 20 | R2DBC pool, max 20 |
-| Simulated I/O | Thread.sleep(50ms) | Thread.sleep(50ms) | Mono.delay(50ms) |
-| GC | G1GC | G1GC or ZGC | G1GC |
-
 ## The workload
 
 `POST /orders` executes two PostgreSQL round-trips (INSERT + SELECT) with a 50ms simulated I/O delay before each database call. Total blocking time per request: 100ms simulated + actual DB time.
@@ -74,6 +62,18 @@ Three Docker containers on a shared network (`bench-net`):
 3. **hey container** - load generator, created per benchmark run
 
 The load generator runs in its own container on the same Docker network as the application. Requests go through Docker networking (`http://bench-app:8080/orders`).
+
+## Configuration
+
+Both apps use a 20-connection database pool. The blocking app limits Tomcat to 20 platform threads to make the thread pool ceiling visible at low concurrency. With virtual threads enabled, the Tomcat thread limit is ignored.
+
+| Setting | Platform | Virtual | Reactive |
+|---|---|---|---|
+| Server | Tomcat (20 threads) | Tomcat (virtual threads) | Netty (event loop) |
+| DB driver | JDBC (blocking) | JDBC (blocking) | R2DBC (non-blocking) |
+| DB pool | HikariCP, max 20 | HikariCP, max 20 | R2DBC pool, max 20 |
+| Simulated I/O | Thread.sleep(50ms) | Thread.sleep(50ms) | Mono.delay(50ms) |
+| GC | G1GC | G1GC or ZGC | G1GC |
 
 ## Stack
 
