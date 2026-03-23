@@ -68,7 +68,7 @@ Three Docker containers on a shared network (`bench-net`):
 2. **bench-app** - the application under test (JAR mounted from host)
 3. **hey container** - load generator, created per benchmark run
 
-The load generator runs in its own container to avoid CPU competition with the application. Requests go through Docker networking (`http://bench-app:8080/orders`), not localhost.
+The load generator runs in its own container on the same Docker network as the application. Requests go through Docker networking (`http://bench-app:8080/orders`).
 
 ## Configuration
 
