@@ -1,6 +1,6 @@
 # Virtual Threads Benchmark
 
-Companion code for Cloud Native Evolution - Article 5: [Virtual Threads: Thread-Per-Request at Scale](https://www.javaisnotdead.com/virtual-threads-thread-per-request-at-scale/)
+Companion code for Cloud Native Evolution - Article 5: [Virtual Threads: Thread-Per-Request at Scale](https://www.javaisnotdead.com/java-virtual-threads-spring-boot/)
 
 Compares four concurrency approaches on the same workload.
 
