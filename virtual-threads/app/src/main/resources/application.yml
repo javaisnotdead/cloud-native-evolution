@@ -1,0 +1,31 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/orders
+    username: orders
+    password: orders
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 10000
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+server:
+  port: 8080
+  tomcat:
+    threads:
+      # Deliberately low to make the thread pool ceiling visible at low concurrency.
+      # Default is 200. Same value as Hikari pool so the thread pool is the bottleneck,
+      # not the connection pool. With virtual threads enabled, this setting is ignored —
+      # each request gets its own virtual thread.
+      max: 20
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
