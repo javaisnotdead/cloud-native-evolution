@@ -1,0 +1,12 @@
+package com.javaisnotdead.gclatency;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class GcLatencyApp {
+
+    public static void main(String[] args) {
+        SpringApplication.run(GcLatencyApp.class, args);
+    }
+}
