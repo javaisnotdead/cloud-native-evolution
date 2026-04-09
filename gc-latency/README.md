@@ -39,7 +39,7 @@ Both the application and the load generator run in Docker containers on a shared
 ## Prerequisites
 
 - Docker Desktop running
-- JDK 25 on PATH (the script uses the bundled Maven wrapper to build the JAR if it's missing — JDK is needed only for that initial build)
+- JDK 25 on PATH (the script uses the bundled Maven wrapper to build the JAR if it's missing - JDK is needed only for that initial build)
 
 ## Quick start
 
